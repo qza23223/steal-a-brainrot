@@ -1,0 +1,2407 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Brainrot Heist Prototype (Three.js)</title>
+    <style>
+      :root {
+        --bg: rgba(10, 12, 18, 0.55);
+        --bg2: rgba(10, 12, 18, 0.35);
+        --text: #eaf2ff;
+        --muted: rgba(234, 242, 255, 0.72);
+        --good: #5dff97;
+        --warn: #ffd166;
+        --bad: #ff5d8f;
+        --line: rgba(255, 255, 255, 0.14);
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: #090b12;
+        color: var(--text);
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        outline: none;
+      }
+
+      /* HUD */
+      #overlay {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+      }
+      #hud {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        width: min(380px, calc(100vw - 24px));
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px 12px 10px;
+        backdrop-filter: blur(10px);
+        pointer-events: none;
+      }
+      #hud .title {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      #hud .title b {
+        font-size: 14px;
+        letter-spacing: 0.5px;
+      }
+      #hud .title span {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .stat {
+        background: var(--bg2);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 8px 10px;
+        line-height: 1.1;
+      }
+      .stat .k {
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 3px;
+      }
+      .stat .v {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      #feed {
+        margin-top: 10px;
+        background: var(--bg2);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 8px 10px;
+      }
+      #feed .k {
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      #feedList {
+        display: grid;
+        gap: 6px;
+        font-size: 12px;
+        color: rgba(234, 242, 255, 0.92);
+      }
+
+      #rightPanel {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: min(360px, calc(100vw - 24px));
+        display: grid;
+        gap: 10px;
+        pointer-events: none;
+      }
+      .panel {
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+        backdrop-filter: blur(10px);
+      }
+      .panel h3 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: rgba(234, 242, 255, 0.86);
+      }
+      #controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 10px;
+        font-size: 12px;
+        color: rgba(234, 242, 255, 0.9);
+      }
+      #controls div b {
+        color: white;
+      }
+      #shieldRow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      #shieldBtn {
+        pointer-events: auto;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: linear-gradient(180deg, rgba(80, 140, 255, 0.9), rgba(60, 105, 255, 0.72));
+        color: #051027;
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        cursor: pointer;
+        user-select: none;
+      }
+      #shieldBtn:disabled {
+        cursor: not-allowed;
+        filter: grayscale(0.6) brightness(0.8);
+        opacity: 0.7;
+      }
+      #shieldMeta {
+        text-align: right;
+        font-size: 12px;
+        color: rgba(234, 242, 255, 0.85);
+        line-height: 1.1;
+      }
+      #shieldMeta .small {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      #prompt {
+        position: absolute;
+        left: 50%;
+        bottom: 18px;
+        transform: translateX(-50%);
+        max-width: min(720px, calc(100vw - 24px));
+        background: rgba(8, 10, 16, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 14px;
+        padding: 10px 12px;
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        text-align: center;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 120ms ease;
+      }
+      #prompt.show {
+        opacity: 1;
+      }
+      #prompt .tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.08);
+        margin-right: 8px;
+        font-weight: 800;
+      }
+
+      #tutorial {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        width: min(420px, calc(100vw - 24px));
+        background: rgba(8, 10, 16, 0.62);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 14px;
+        padding: 12px;
+        backdrop-filter: blur(10px);
+        pointer-events: none;
+      }
+      #tutorial b {
+        display: block;
+        margin-bottom: 6px;
+      }
+      #tutorial .muted {
+        color: rgba(234, 242, 255, 0.8);
+        font-size: 13px;
+      }
+      #tutorial.hide {
+        display: none;
+      }
+
+      #centerHint {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 12px;
+        color: rgba(234, 242, 255, 0.5);
+        pointer-events: none;
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+      }
+
+      /* Tiny */
+      .rarityPill {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+        margin-left: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.08);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="overlay" aria-hidden="true">
+      <div id="hud">
+        <div class="title">
+          <b>Brainrot Heist Prototype</b>
+          <span>Single‑file Three.js • No external assets</span>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="k">Cash</div>
+            <div class="v" id="cash">$0</div>
+          </div>
+          <div class="stat">
+            <div class="k">Income / sec</div>
+            <div class="v" id="income">$0 /s</div>
+          </div>
+          <div class="stat">
+            <div class="k">Owned Units</div>
+            <div class="v" id="owned">0</div>
+          </div>
+          <div class="stat">
+            <div class="k">Holding</div>
+            <div class="v" id="holding">None</div>
+          </div>
+        </div>
+        <div id="feed">
+          <div class="k">Drama feed (last few events)</div>
+          <div id="feedList"></div>
+        </div>
+      </div>
+
+      <div id="rightPanel">
+        <div class="panel">
+          <h3>Controls</h3>
+          <div id="controls">
+            <div><b>WASD</b> Move</div>
+            <div><b>Mouse</b> Look (click to lock)</div>
+            <div><b>Shift</b> Sprint</div>
+            <div><b>Esc</b> Unlock mouse</div>
+            <div><b>E</b> Buy / Pick up / Steal</div>
+            <div><b>Q</b> Drop / Place</div>
+            <div><b>Space</b> Jump (small)</div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Base Shield</h3>
+          <div id="shieldRow">
+            <button id="shieldBtn" type="button">Activate Shield</button>
+            <div id="shieldMeta">
+              <div id="shieldState"><span class="small">Status:</span> Ready</div>
+              <div id="shieldCd" class="small">Cooldown: 0.0s</div>
+            </div>
+          </div>
+          <div style="margin-top: 10px; font-size: 12px; color: rgba(234, 242, 255, 0.86); line-height: 1.25">
+            Shields prevent other “players” from stealing units from your plot for a short time.
+          </div>
+        </div>
+      </div>
+
+      <div id="prompt"></div>
+      <div id="tutorial">
+        <b id="tutorialTitle">Welcome!</b>
+        <div class="muted" id="tutorialText">Walk to the conveyor and press <b>E</b> to buy your first unit.</div>
+      </div>
+      <div id="centerHint">+ (click to lock mouse • move near things to interact)</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script>
+      (() => {
+        // ============================================================
+        // Tiny utilities
+        // ============================================================
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+        const lerp = (a, b, t) => a + (b - a) * t;
+        const rand = (a = 0, b = 1) => a + Math.random() * (b - a);
+        const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+        const nowMs = () => performance.now();
+        const fmtMoney = (n) => {
+          const v = Math.floor(n);
+          if (v >= 1_000_000) return "$" + (v / 1_000_000).toFixed(2) + "M";
+          if (v >= 1_000) return "$" + (v / 1_000).toFixed(2) + "K";
+          return "$" + v;
+        };
+        const fmtTime = (s) => (s <= 0 ? "0.0s" : s.toFixed(1) + "s");
+        const weightedPick = (items) => {
+          // items: [{w, v}]
+          let sum = 0;
+          for (const it of items) sum += it.w;
+          let r = Math.random() * sum;
+          for (const it of items) {
+            r -= it.w;
+            if (r <= 0) return it.v;
+          }
+          return items[items.length - 1].v;
+        };
+        const colorHex = (hex) => new THREE.Color(hex);
+        const hslToColor = (h, s, l) => {
+          const c = new THREE.Color();
+          c.setHSL(((h % 360) + 360) % 360 / 360, clamp(s, 0, 1), clamp(l, 0, 1));
+          return c;
+        };
+
+        // ============================================================
+        // Audio (tiny WebAudio beeps) — unlocked on first input
+        // ============================================================
+        let audioCtx = null;
+        const ensureAudio = () => {
+          if (audioCtx) return audioCtx;
+          try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          } catch {
+            audioCtx = null;
+          }
+          return audioCtx;
+        };
+        const beep = (kind = "coin", vol = 0.12) => {
+          const ctx = ensureAudio();
+          if (!ctx) return;
+          const t0 = ctx.currentTime;
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = "sine";
+          const freq =
+            kind === "coin"
+              ? 880
+              : kind === "buy"
+                ? 660
+                : kind === "shield"
+                  ? 520
+                  : kind === "alarm"
+                    ? 140
+                    : 330;
+          o.frequency.setValueAtTime(freq, t0);
+          o.frequency.exponentialRampToValueAtTime(freq * 1.35, t0 + 0.08);
+          g.gain.setValueAtTime(0.0001, t0);
+          g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+          g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+          o.connect(g);
+          g.connect(ctx.destination);
+          o.start(t0);
+          o.stop(t0 + 0.16);
+        };
+
+        // ============================================================
+        // DOM
+        // ============================================================
+        const elCash = document.getElementById("cash");
+        const elIncome = document.getElementById("income");
+        const elOwned = document.getElementById("owned");
+        const elHolding = document.getElementById("holding");
+        const elPrompt = document.getElementById("prompt");
+        const elFeedList = document.getElementById("feedList");
+        const elTut = document.getElementById("tutorial");
+        const elTutTitle = document.getElementById("tutorialTitle");
+        const elTutText = document.getElementById("tutorialText");
+        const elShieldBtn = document.getElementById("shieldBtn");
+        const elShieldState = document.getElementById("shieldState");
+        const elShieldCd = document.getElementById("shieldCd");
+
+        const feed = [];
+        const pushFeed = (msg, kind = "info") => {
+          const time = new Date();
+          const stamp = time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          feed.unshift({ msg, kind, stamp });
+          while (feed.length > 6) feed.pop();
+          elFeedList.innerHTML = feed
+            .map((it) => {
+              const c = it.kind === "good" ? "var(--good)" : it.kind === "bad" ? "var(--bad)" : it.kind === "warn" ? "var(--warn)" : "rgba(234, 242, 255, 0.9)";
+              return `<div style="display:flex; gap:8px; align-items:baseline;">
+                <span style="opacity:.55; font-variant-numeric:tabular-nums;">${it.stamp}</span>
+                <span style="color:${c};">${it.msg}</span>
+              </div>`;
+            })
+            .join("");
+        };
+
+        const showPrompt = (html) => {
+          if (!html) {
+            elPrompt.classList.remove("show");
+            elPrompt.innerHTML = "";
+            return;
+          }
+          elPrompt.innerHTML = html;
+          elPrompt.classList.add("show");
+        };
+
+        // ============================================================
+        // Three.js setup
+        // ============================================================
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x0a0c14, 35, 95);
+        scene.background = new THREE.Color(0x0a0c14);
+
+        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 250);
+        camera.position.set(0, 9, -12);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x203040, 0.85);
+        scene.add(hemi);
+
+        const sun = new THREE.DirectionalLight(0xffffff, 1.05);
+        sun.position.set(18, 28, -12);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.camera.near = 2;
+        sun.shadow.camera.far = 90;
+        sun.shadow.camera.left = -45;
+        sun.shadow.camera.right = 45;
+        sun.shadow.camera.top = 45;
+        sun.shadow.camera.bottom = -45;
+        scene.add(sun);
+
+        // ============================================================
+        // Procedural textures
+        // ============================================================
+        const makeCanvasTex = (w, h, drawFn) => {
+          const c = document.createElement("canvas");
+          c.width = w;
+          c.height = h;
+          const ctx = c.getContext("2d");
+          drawFn(ctx, w, h);
+          const tex = new THREE.CanvasTexture(c);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+          tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+          tex.needsUpdate = true;
+          return tex;
+        };
+
+        const texChecker = makeCanvasTex(128, 128, (ctx, w, h) => {
+          const s = 16;
+          for (let y = 0; y < h; y += s) {
+            for (let x = 0; x < w; x += s) {
+              const a = ((x / s) | 0) + ((y / s) | 0);
+              ctx.fillStyle = a % 2 === 0 ? "#6fd3ff" : "#5ec2ee";
+              ctx.fillRect(x, y, s, s);
+            }
+          }
+          ctx.globalAlpha = 0.25;
+          for (let i = 0; i < 800; i++) {
+            ctx.fillStyle = "rgba(255,255,255,0.25)";
+            ctx.fillRect((Math.random() * w) | 0, (Math.random() * h) | 0, 1, 1);
+          }
+          ctx.globalAlpha = 1;
+        });
+        texChecker.repeat.set(40, 40);
+
+        const texConveyor = makeCanvasTex(128, 128, (ctx, w, h) => {
+          ctx.fillStyle = "#1e2430";
+          ctx.fillRect(0, 0, w, h);
+          // stripes
+          for (let i = 0; i < 10; i++) {
+            const y = (i * (h / 10)) | 0;
+            ctx.fillStyle = i % 2 === 0 ? "rgba(130,150,200,0.20)" : "rgba(255,255,255,0.07)";
+            ctx.fillRect(0, y, w, (h / 10) | 0);
+          }
+          ctx.globalAlpha = 0.25;
+          ctx.strokeStyle = "rgba(255,255,255,0.18)";
+          for (let x = 0; x < w; x += 16) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, h);
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+        });
+        texConveyor.repeat.set(1, 14);
+
+        const texMetal = makeCanvasTex(128, 128, (ctx, w, h) => {
+          const g = ctx.createLinearGradient(0, 0, w, h);
+          g.addColorStop(0, "#a8b3c5");
+          g.addColorStop(0.5, "#d8e2f2");
+          g.addColorStop(1, "#7c8aa3");
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, w, h);
+          ctx.globalAlpha = 0.25;
+          ctx.fillStyle = "rgba(0,0,0,0.2)";
+          for (let i = 0; i < 900; i++) ctx.fillRect((Math.random() * w) | 0, (Math.random() * h) | 0, 1, 1);
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = "rgba(255,255,255,0.23)";
+          for (let i = 0; i < 6; i++) {
+            ctx.beginPath();
+            ctx.arc(w / 2, h / 2, 10 + i * 12, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        });
+        texMetal.repeat.set(2, 2);
+
+        const makeLabelTexture = (lines, opts = {}) => {
+          const { w = 256, h = 128, color = "#ffffff", accent = "#5dff97" } = opts;
+          return makeCanvasTex(w, h, (ctx, W, H) => {
+            // rounded rect bg
+            ctx.clearRect(0, 0, W, H);
+            const r = 18;
+            ctx.beginPath();
+            ctx.moveTo(r, 10);
+            ctx.arcTo(W - 10, 10, W - 10, H - 10, r);
+            ctx.arcTo(W - 10, H - 10, 10, H - 10, r);
+            ctx.arcTo(10, H - 10, 10, 10, r);
+            ctx.arcTo(10, 10, W - 10, 10, r);
+            ctx.closePath();
+            const g = ctx.createLinearGradient(0, 0, 0, H);
+            g.addColorStop(0, "rgba(7,10,18,0.85)");
+            g.addColorStop(1, "rgba(7,10,18,0.55)");
+            ctx.fillStyle = g;
+            ctx.fill();
+            ctx.strokeStyle = "rgba(255,255,255,0.18)";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.fillStyle = accent;
+            ctx.globalAlpha = 0.28;
+            ctx.fillRect(14, 18, W - 28, 10);
+            ctx.globalAlpha = 1;
+
+            ctx.fillStyle = color;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.font = "bold 24px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+            ctx.fillText(lines[0] || "", W / 2, H * 0.40);
+            ctx.font = "700 18px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+            ctx.fillStyle = "rgba(234,242,255,0.92)";
+            ctx.fillText(lines[1] || "", W / 2, H * 0.68);
+          });
+        };
+
+        // ============================================================
+        // Materials (Roblox-ish: plastic, neon, metal)
+        // ============================================================
+        const matGround = new THREE.MeshStandardMaterial({
+          map: texChecker,
+          roughness: 0.95,
+          metalness: 0.02,
+        });
+        const matConveyorTop = new THREE.MeshStandardMaterial({
+          map: texConveyor,
+          roughness: 0.55,
+          metalness: 0.22,
+          emissive: new THREE.Color(0x0b1020),
+          emissiveIntensity: 0.6,
+        });
+        const matConveyorSide = new THREE.MeshStandardMaterial({
+          map: texMetal,
+          roughness: 0.35,
+          metalness: 0.9,
+          color: 0x9fb0c9,
+        });
+
+        const plastic = (hex, rough = 0.55) =>
+          new THREE.MeshStandardMaterial({
+            color: colorHex(hex),
+            roughness: rough,
+            metalness: 0.05,
+          });
+        const neon = (hex, intensity = 1.25) =>
+          new THREE.MeshStandardMaterial({
+            color: colorHex(hex),
+            roughness: 0.35,
+            metalness: 0.1,
+            emissive: colorHex(hex),
+            emissiveIntensity: intensity,
+          });
+        const metal = (hex) =>
+          new THREE.MeshStandardMaterial({
+            color: colorHex(hex),
+            map: texMetal,
+            roughness: 0.22,
+            metalness: 1.0,
+          });
+
+        // ============================================================
+        // World
+        // ============================================================
+        const world = {
+          time: 0,
+          paused: false,
+          bounds: { minX: -46, maxX: 46, minZ: -46, maxZ: 46 },
+        };
+
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), matGround);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Decorative skybox-ish giant dome
+        const skyGeo = new THREE.SphereGeometry(120, 18, 12);
+        skyGeo.scale(-1, 1, 1);
+        const skyMat = new THREE.MeshBasicMaterial({ color: 0x070915 });
+        const sky = new THREE.Mesh(skyGeo, skyMat);
+        scene.add(sky);
+
+        // ============================================================
+        // Collision system (2D circle vs AABB)
+        // ============================================================
+        const colliders = []; // {minX,maxX,minZ,maxZ, tag}
+        const addCollider = (minX, maxX, minZ, maxZ, tag = "wall") => {
+          colliders.push({ minX, maxX, minZ, maxZ, tag });
+        };
+        const circleVsAabbPush = (pos, radius, box) => {
+          const cx = clamp(pos.x, box.minX, box.maxX);
+          const cz = clamp(pos.z, box.minZ, box.maxZ);
+          let dx = pos.x - cx;
+          let dz = pos.z - cz;
+          const d2 = dx * dx + dz * dz;
+          const r2 = radius * radius;
+          if (d2 > r2) return false;
+
+          // Normal case: push out along the closest-point vector
+          if (d2 > 1e-10) {
+            const d = Math.sqrt(d2);
+            const push = (radius - d) / d;
+            pos.x += dx * push;
+            pos.z += dz * push;
+            return true;
+          }
+
+          // Special case: circle center is inside the AABB (or exactly on an edge),
+          // so dx=dz=0. Push out along the nearest face to prevent "stuck in wall".
+          const toMinX = pos.x - box.minX;
+          const toMaxX = box.maxX - pos.x;
+          const toMinZ = pos.z - box.minZ;
+          const toMaxZ = box.maxZ - pos.z;
+          const m = Math.min(toMinX, toMaxX, toMinZ, toMaxZ);
+          if (m === toMinX) pos.x = box.minX - radius;
+          else if (m === toMaxX) pos.x = box.maxX + radius;
+          else if (m === toMinZ) pos.z = box.minZ - radius;
+          else pos.z = box.maxZ + radius;
+          return true;
+        };
+
+        const clampToBounds = (pos, radius) => {
+          pos.x = clamp(pos.x, world.bounds.minX + radius, world.bounds.maxX - radius);
+          pos.z = clamp(pos.z, world.bounds.minZ + radius, world.bounds.maxZ - radius);
+        };
+
+        // ============================================================
+        // Conveyor
+        // ============================================================
+        const conveyor = {
+          centerX: 0,
+          z0: -40,
+          z1: 40,
+          width: 7.5,
+          speed: 5.2,
+          spawnEvery: 2.2,
+          spawnTimer: 0,
+        };
+
+        const conveyorGroup = new THREE.Group();
+        scene.add(conveyorGroup);
+
+        const beltBase = new THREE.Mesh(new THREE.BoxGeometry(conveyor.width, 0.7, conveyor.z1 - conveyor.z0), matConveyorSide);
+        beltBase.position.set(conveyor.centerX, 0.35, (conveyor.z0 + conveyor.z1) / 2);
+        beltBase.castShadow = true;
+        beltBase.receiveShadow = true;
+        conveyorGroup.add(beltBase);
+
+        const beltTop = new THREE.Mesh(new THREE.BoxGeometry(conveyor.width - 0.6, 0.08, conveyor.z1 - conveyor.z0 - 0.6), matConveyorTop);
+        beltTop.position.set(conveyor.centerX, 0.74, (conveyor.z0 + conveyor.z1) / 2);
+        beltTop.castShadow = false;
+        beltTop.receiveShadow = true;
+        conveyorGroup.add(beltTop);
+
+        const railMat = metal("#b6c6dd");
+        const railL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.6, conveyor.z1 - conveyor.z0 + 0.2), railMat);
+        railL.position.set(conveyor.centerX - conveyor.width / 2 + 0.2, 1.05, (conveyor.z0 + conveyor.z1) / 2);
+        railL.castShadow = true;
+        conveyorGroup.add(railL);
+        const railR = railL.clone();
+        railR.position.x = conveyor.centerX + conveyor.width / 2 - 0.2;
+        conveyorGroup.add(railR);
+
+        // Colliders for conveyor rails so you can't walk through
+        addCollider(conveyor.centerX - conveyor.width / 2 - 0.15, conveyor.centerX - conveyor.width / 2 + 0.55, conveyor.z0 - 0.2, conveyor.z1 + 0.2, "conveyor");
+        addCollider(conveyor.centerX + conveyor.width / 2 - 0.55, conveyor.centerX + conveyor.width / 2 + 0.15, conveyor.z0 - 0.2, conveyor.z1 + 0.2, "conveyor");
+
+        // ============================================================
+        // Rarities + mutations
+        // ============================================================
+        const RARITIES = [
+          { key: "Common", w: 55, priceMult: 1.0, incomeMult: 1.0, color: "#b0bec5" },
+          { key: "Rare", w: 22, priceMult: 1.4, incomeMult: 1.6, color: "#5dff97" },
+          { key: "Epic", w: 12, priceMult: 2.3, incomeMult: 2.8, color: "#b56bff" },
+          { key: "Legendary", w: 6, priceMult: 4.2, incomeMult: 5.4, color: "#ffb020" },
+          { key: "Mythic", w: 3, priceMult: 7.5, incomeMult: 9.8, color: "#ff5d8f" },
+          { key: "Secret", w: 1.2, priceMult: 15.0, incomeMult: 22.0, color: "#41d9ff" },
+          { key: "OG", w: 0.8, priceMult: 24.0, incomeMult: 35.0, color: "#ffe082" },
+        ];
+
+        const MUTATIONS = [
+          { key: "None", w: 70, priceMult: 1.0, incomeMult: 1.0, kind: "none" },
+          { key: "Gold", w: 15, priceMult: 1.5, incomeMult: 1.6, kind: "gold" },
+          { key: "Diamond", w: 9, priceMult: 2.0, incomeMult: 2.25, kind: "diamond" },
+          { key: "Rainbow", w: 4, priceMult: 3.0, incomeMult: 3.4, kind: "rainbow" },
+          { key: "Galaxy", w: 2, priceMult: 4.5, incomeMult: 5.0, kind: "galaxy" },
+        ];
+
+        // ============================================================
+        // Brainrot unit definitions (procedural, inspired by your pictures)
+        // ============================================================
+        const UNIT_DEFS = [
+          { key: "Sneaker Shark", archetype: "shark", basePrice: 70, baseIncome: 1.0 },
+          { key: "Rootwalker", archetype: "root", basePrice: 95, baseIncome: 1.5 },
+          { key: "Ninja Brew", archetype: "ninjaCup", basePrice: 120, baseIncome: 2.2 },
+          { key: "Ballerina Latte", archetype: "ballerinaCup", basePrice: 155, baseIncome: 3.0 },
+          { key: "Stick Buddy", archetype: "stick", basePrice: 55, baseIncome: 0.85 },
+        ];
+
+        let unitIdSeq = 1;
+        const allUnits = new Map(); // id -> unit
+        const conveyorUnits = [];
+        const looseUnits = [];
+
+        const makeAuraRing = (hex, scale = 1) => {
+          const g = new THREE.RingGeometry(0.35 * scale, 0.52 * scale, 28);
+          const m = new THREE.MeshBasicMaterial({ color: colorHex(hex), transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+          const ring = new THREE.Mesh(g, m);
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.y = 0.02;
+          return ring;
+        };
+
+        const applyMutationVisual = (group, mutationKind, rarityColor) => {
+          group.userData.mutationKind = mutationKind;
+          group.userData.rarityColor = rarityColor;
+          if (mutationKind === "gold") {
+            group.traverse((o) => {
+              if (o.isMesh) {
+                o.material = new THREE.MeshStandardMaterial({
+                  color: new THREE.Color(0xffd24a),
+                  roughness: 0.22,
+                  metalness: 1.0,
+                  emissive: new THREE.Color(0x332200),
+                  emissiveIntensity: 0.35,
+                });
+                o.castShadow = true;
+              }
+            });
+          } else if (mutationKind === "diamond") {
+            group.traverse((o) => {
+              if (o.isMesh) {
+                o.material = new THREE.MeshStandardMaterial({
+                  color: new THREE.Color(0x86e6ff),
+                  roughness: 0.08,
+                  metalness: 0.85,
+                  emissive: new THREE.Color(0x1a4b66),
+                  emissiveIntensity: 0.55,
+                });
+              }
+            });
+          } else if (mutationKind === "galaxy") {
+            const texGalaxy = makeCanvasTex(128, 128, (ctx, w, h) => {
+              ctx.fillStyle = "#070a14";
+              ctx.fillRect(0, 0, w, h);
+              for (let i = 0; i < 1200; i++) {
+                const x = (Math.random() * w) | 0;
+                const y = (Math.random() * h) | 0;
+                const a = Math.random();
+                ctx.fillStyle = a > 0.985 ? "rgba(255,255,255,0.9)" : a > 0.97 ? "rgba(120,200,255,0.65)" : "rgba(150,90,255,0.20)";
+                ctx.fillRect(x, y, 1, 1);
+              }
+              const g = ctx.createRadialGradient(w * 0.35, h * 0.35, 5, w * 0.35, h * 0.35, 70);
+              g.addColorStop(0, "rgba(255,70,200,0.28)");
+              g.addColorStop(1, "rgba(0,0,0,0)");
+              ctx.fillStyle = g;
+              ctx.fillRect(0, 0, w, h);
+            });
+            group.traverse((o) => {
+              if (o.isMesh) {
+                o.material = new THREE.MeshStandardMaterial({
+                  map: texGalaxy,
+                  roughness: 0.35,
+                  metalness: 0.2,
+                  emissive: new THREE.Color(0x3b1d77),
+                  emissiveIntensity: 0.95,
+                });
+              }
+            });
+          } else if (mutationKind === "rainbow") {
+            // Leave materials; animate tint in loop
+          }
+        };
+
+        const makeEyes = (scale = 1) => {
+          const eyes = new THREE.Group();
+          const eyeW = new THREE.Mesh(new THREE.SphereGeometry(0.12 * scale, 10, 10), plastic("#ffffff", 0.35));
+          const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.06 * scale, 10, 10), plastic("#151515", 0.25));
+          const eye1 = eyeW.clone();
+          const eye2 = eyeW.clone();
+          eye1.position.set(-0.15 * scale, 0, 0);
+          eye2.position.set(0.15 * scale, 0, 0);
+          const p1 = pupil.clone();
+          const p2 = pupil.clone();
+          p1.position.set(-0.15 * scale, -0.02 * scale, 0.09 * scale);
+          p2.position.set(0.15 * scale, -0.02 * scale, 0.09 * scale);
+          eyes.add(eye1, eye2, p1, p2);
+          return eyes;
+        };
+
+        const createUnitModel = (archetype, accentHex) => {
+          const g = new THREE.Group();
+          const accent = accentHex || "#5dff97";
+
+          // Shared tiny shadow pad for readability
+          const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.65, 18), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 }));
+          shadow.rotation.x = -Math.PI / 2;
+          shadow.position.y = 0.01;
+          g.add(shadow);
+
+          if (archetype === "shark") {
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.55, 0.65), plastic("#5c7890", 0.55));
+            body.position.set(0, 0.95, 0);
+            body.castShadow = true;
+            g.add(body);
+            const belly = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.35, 0.55), plastic("#e6e6e6", 0.45));
+            belly.position.set(0, 0.75, 0);
+            belly.castShadow = true;
+            g.add(belly);
+            const nose = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.6, 10), plastic("#4e6a82", 0.55));
+            nose.rotation.x = Math.PI / 2;
+            nose.position.set(0, 0.95, 0.62);
+            nose.castShadow = true;
+            g.add(nose);
+            const fin = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.42, 0.4), plastic("#4e6a82", 0.55));
+            fin.position.set(0, 1.32, -0.05);
+            fin.rotation.x = 0.2;
+            fin.castShadow = true;
+            g.add(fin);
+            // legs + sneakers
+            const legMat = plastic("#2b313a", 0.6);
+            for (const sx of [-0.45, 0.45]) {
+              const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.55, 10), legMat);
+              leg.position.set(sx, 0.5, 0.18);
+              leg.castShadow = true;
+              g.add(leg);
+              const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.18, 0.55), plastic(accent, 0.35));
+              shoe.position.set(sx, 0.22, 0.32);
+              shoe.castShadow = true;
+              g.add(shoe);
+              const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.28), plastic("#ffffff", 0.3));
+              stripe.position.set(sx - 0.1 * Math.sign(sx), 0.26, 0.42);
+              stripe.castShadow = true;
+              g.add(stripe);
+            }
+            // gills
+            const gillMat = plastic("#2b313a", 0.75);
+            for (let i = 0; i < 4; i++) {
+              const gill = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.18, 0.02), gillMat);
+              gill.position.set(-0.25 + i * 0.14, 0.95, 0.25);
+              g.add(gill);
+            }
+          } else if (archetype === "root") {
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.44, 1.2, 10), plastic("#8a624a", 0.9));
+            trunk.position.set(0, 0.95, 0);
+            trunk.castShadow = true;
+            g.add(trunk);
+            const moss = new THREE.Mesh(new THREE.SphereGeometry(0.48, 12, 10), plastic("#45d06a", 0.9));
+            moss.position.set(0.02, 1.55, -0.05);
+            moss.castShadow = true;
+            g.add(moss);
+            // big feet
+            const footMat = plastic("#caa07e", 0.65);
+            for (const sx of [-0.32, 0.32]) {
+              const foot = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.22, 1.0), footMat);
+              foot.position.set(sx, 0.18, 0.25);
+              foot.castShadow = true;
+              g.add(foot);
+            }
+            // arms (roots)
+            const armMat = plastic("#7c5742", 0.9);
+            const arm1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.8, 8), armMat);
+            arm1.position.set(-0.55, 1.05, 0);
+            arm1.rotation.z = 0.7;
+            arm1.castShadow = true;
+            const arm2 = arm1.clone();
+            arm2.position.x = 0.55;
+            arm2.rotation.z = -0.7;
+            g.add(arm1, arm2);
+            // nose-ish
+            const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.09, 0.55, 8), plastic("#caa07e", 0.6));
+            nose.rotation.x = Math.PI / 2;
+            nose.position.set(0.06, 1.18, 0.48);
+            nose.castShadow = true;
+            g.add(nose);
+          } else if (archetype === "ninjaCup") {
+            const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.62, 1.1, 14), plastic("#c77a3e", 0.75));
+            cup.position.set(0, 0.95, 0);
+            cup.castShadow = true;
+            g.add(cup);
+            const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.18, 12), plastic("#2e2e38", 0.5));
+            lid.position.set(0, 1.6, 0);
+            lid.castShadow = true;
+            g.add(lid);
+            const band = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.22, 0.22), plastic("#11131a", 0.55));
+            band.position.set(0, 1.25, 0.48);
+            band.castShadow = true;
+            g.add(band);
+            const knot = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.18), plastic(accent, 0.35));
+            knot.position.set(0.62, 1.25, 0.48);
+            knot.castShadow = true;
+            g.add(knot);
+            const eyes = makeEyes(1.0);
+            eyes.position.set(0, 1.12, 0.58);
+            g.add(eyes);
+            // swords
+            const swordMat = metal("#b6c6dd");
+            for (const s of [-1, 1]) {
+              const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.9, 0.14), swordMat);
+              blade.position.set(0.62 * s, 0.9, -0.35);
+              blade.rotation.z = 0.6 * s;
+              blade.castShadow = true;
+              const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.2), plastic("#2b313a", 0.65));
+              hilt.position.set(0.62 * s, 0.5, -0.27);
+              hilt.rotation.z = 0.6 * s;
+              hilt.castShadow = true;
+              g.add(blade, hilt);
+            }
+          } else if (archetype === "ballerinaCup") {
+            const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.7, 1.2, 14), plastic("#f2f2f2", 0.75));
+            cup.position.set(0, 1.0, 0);
+            cup.castShadow = true;
+            g.add(cup);
+            const latte = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.56, 0.16, 14), plastic("#b56b3d", 0.55));
+            latte.position.set(0, 1.66, 0);
+            latte.castShadow = true;
+            g.add(latte);
+            const foam = new THREE.Mesh(new THREE.CircleGeometry(0.53, 18), plastic("#f5d2c2", 0.4));
+            foam.rotation.x = -Math.PI / 2;
+            foam.position.set(0, 1.75, 0);
+            g.add(foam);
+            const eyes = makeEyes(1.0);
+            eyes.position.set(0, 1.16, 0.63);
+            g.add(eyes);
+            // tutu
+            const tutu = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.16, 10, 18), plastic(accent, 0.5));
+            tutu.rotation.x = Math.PI / 2;
+            tutu.position.set(0, 0.7, 0);
+            tutu.castShadow = true;
+            g.add(tutu);
+            // legs + toes
+            const legMat = plastic("#f1c5b5", 0.65);
+            for (const sx of [-0.22, 0.22]) {
+              const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.55, 10), legMat);
+              leg.position.set(sx, 0.35, 0.1);
+              leg.castShadow = true;
+              g.add(leg);
+              const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.14, 0.36), plastic("#ff9bb8", 0.55));
+              shoe.position.set(sx, 0.12, 0.18);
+              shoe.castShadow = true;
+              g.add(shoe);
+            }
+            // arms
+            const armMat = plastic("#f1c5b5", 0.65);
+            const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.7, 10), armMat);
+            arm.position.set(0.75, 1.2, 0.25);
+            arm.rotation.z = -0.8;
+            arm.castShadow = true;
+            const arm2 = arm.clone();
+            arm2.position.x = -0.75;
+            arm2.rotation.z = 0.8;
+            g.add(arm, arm2);
+          } else {
+            // stick
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 1.2, 10), plastic(accent, 0.55));
+            body.position.set(0, 0.95, 0);
+            body.castShadow = true;
+            g.add(body);
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), plastic("#ffe082", 0.55));
+            head.position.set(0, 1.65, 0);
+            head.castShadow = true;
+            g.add(head);
+            const eyes = makeEyes(0.9);
+            eyes.position.set(0, 1.65, 0.3);
+            g.add(eyes);
+            for (const sx of [-0.32, 0.32]) {
+              const foot = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.16, 0.55), plastic("#2b313a", 0.7));
+              foot.position.set(sx, 0.16, 0.2);
+              foot.castShadow = true;
+              g.add(foot);
+            }
+          }
+
+          g.traverse((o) => {
+            if (o.isMesh) o.castShadow = true;
+          });
+          return g;
+        };
+
+        const createUnitInstance = () => {
+          const def = pick(UNIT_DEFS);
+          const rarity = weightedPick(RARITIES.map((r) => ({ w: r.w, v: r })));
+          const mutation = weightedPick(MUTATIONS.map((m) => ({ w: m.w, v: m })));
+
+          const baseAccent = rarity.color;
+          const model = createUnitModel(def.archetype, baseAccent);
+
+          // pedestal
+          const pedestal = new THREE.Group();
+          const pBase = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 0.28, 14), metal("#9fb0c9"));
+          pBase.position.y = 0.14;
+          pBase.castShadow = true;
+          pBase.receiveShadow = true;
+          pedestal.add(pBase);
+          const pTop = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.09, 14), neon(rarity.color, 1.1));
+          pTop.position.y = 0.32;
+          pedestal.add(pTop);
+
+          // aura ring + label
+          const ring = makeAuraRing(rarity.color, 1.25);
+          ring.position.y = 0.33;
+          pedestal.add(ring);
+
+          const price = Math.round(def.basePrice * rarity.priceMult * mutation.priceMult);
+          const income = def.baseIncome * rarity.incomeMult * mutation.incomeMult;
+
+          const labelTex = makeLabelTexture(
+            [
+              def.key,
+              `${rarity.key}${mutation.key !== "None" ? " • " + mutation.key : ""} • ${fmtMoney(price)} • +${income.toFixed(1)}/s`,
+            ],
+            { accent: rarity.color },
+          );
+          const label = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.4, 1.15),
+            new THREE.MeshBasicMaterial({ map: labelTex, transparent: true, opacity: 0.96 }),
+          );
+          label.position.set(0, 2.2, -1.05);
+          label.rotation.y = Math.PI;
+          pedestal.add(label);
+
+          model.position.y = 0.35;
+          pedestal.add(model);
+
+          applyMutationVisual(model, mutation.kind, rarity.color);
+          if (mutation.kind === "rainbow") {
+            // add small halo
+            const halo = makeAuraRing("#ffffff", 1.45);
+            halo.material.opacity = 0.45;
+            halo.position.y = 0.34;
+            pedestal.add(halo);
+            pedestal.userData.rainbowHalo = halo;
+          }
+
+          pedestal.userData.kind = "unitPedestal";
+
+          const unit = {
+            id: "U" + unitIdSeq++,
+            defKey: def.key,
+            archetype: def.archetype,
+            rarity,
+            mutation,
+            price,
+            income,
+            state: "conveyor", // conveyor | held | placed | dropped
+            ownerPlotId: null,
+            stolenFromPlotId: null,
+            worldReturnAt: 0,
+            mesh: pedestal,
+            model,
+            label,
+            ring,
+          };
+          allUnits.set(unit.id, unit);
+          return unit;
+        };
+
+        // ============================================================
+        // Plots (player + 3 NPCs)
+        // ============================================================
+        const plotDefs = [
+          { id: "player", name: "You", color: "#63a4ff", center: new THREE.Vector3(-22, 0, -22) },
+          { id: "npc1", name: "Byte", color: "#ff7aa2", center: new THREE.Vector3(22, 0, -22) },
+          { id: "npc2", name: "Gizmo", color: "#5dff97", center: new THREE.Vector3(-22, 0, 22) },
+          { id: "npc3", name: "Nova", color: "#ffd166", center: new THREE.Vector3(22, 0, 22) },
+        ];
+
+        const plots = new Map(); // id->plot
+        const plotSize = 16;
+        const wallH = 2.2;
+        const wallT = 0.45;
+        const displayPadRadius = 0.65;
+        const displayPadSlots = 6;
+
+        const plotGroup = new THREE.Group();
+        scene.add(plotGroup);
+
+        const makePlot = (pd) => {
+          const g = new THREE.Group();
+          g.position.copy(pd.center);
+          plotGroup.add(g);
+
+          // Keep plots level with the ground (no raised platform / step)
+          const plotFloorY = 0.02;
+
+          const floor = new THREE.Mesh(new THREE.PlaneGeometry(plotSize, plotSize), plastic(pd.color, 0.8));
+          floor.rotation.x = -Math.PI / 2;
+          floor.position.y = plotFloorY;
+          floor.receiveShadow = true;
+          floor.castShadow = false;
+          g.add(floor);
+
+          // Outline trim
+          const trim = new THREE.Mesh(new THREE.BoxGeometry(plotSize + 0.3, 0.06, plotSize + 0.3), neon(pd.color, 0.8));
+          trim.position.y = plotFloorY + 0.03;
+          trim.material.transparent = true;
+          trim.material.opacity = 0.28;
+          g.add(trim);
+
+          // Walls (leave an entry gap facing the conveyor at x direction)
+          const isLeft = pd.center.x < 0;
+          const entrySide = isLeft ? 1 : -1; // +x wall for left plots, -x wall for right plots
+          // Doorway gap (visual + collision). Keep it door-sized but passable.
+          const gap = 3.2;
+          const wallMat = plastic("#1e2430", 0.7);
+
+          const wallSegments = [];
+          // North (+z)
+          wallSegments.push({ x: 0, z: plotSize / 2 - wallT / 2, w: plotSize, d: wallT });
+          // South (-z)
+          wallSegments.push({ x: 0, z: -plotSize / 2 + wallT / 2, w: plotSize, d: wallT });
+          // West (-x)
+          if (entrySide !== -1) wallSegments.push({ x: -plotSize / 2 + wallT / 2, z: 0, w: wallT, d: plotSize });
+          // East (+x) split by entry
+          if (entrySide === 1) {
+            wallSegments.push({ x: plotSize / 2 - wallT / 2, z: plotSize / 4 + gap / 4, w: wallT, d: plotSize / 2 - gap / 2 });
+            wallSegments.push({ x: plotSize / 2 - wallT / 2, z: -plotSize / 4 - gap / 4, w: wallT, d: plotSize / 2 - gap / 2 });
+          } else {
+            // Entry on west for right plots
+            wallSegments.push({ x: -plotSize / 2 + wallT / 2, z: plotSize / 4 + gap / 4, w: wallT, d: plotSize / 2 - gap / 2 });
+            wallSegments.push({ x: -plotSize / 2 + wallT / 2, z: -plotSize / 4 - gap / 4, w: wallT, d: plotSize / 2 - gap / 2 });
+          }
+
+          for (const s of wallSegments) {
+            const wall = new THREE.Mesh(new THREE.BoxGeometry(s.w, wallH, s.d), wallMat);
+            wall.position.set(s.x, wallH / 2 + plotFloorY, s.z);
+            wall.castShadow = true;
+            g.add(wall);
+            addCollider(pd.center.x + s.x - s.w / 2, pd.center.x + s.x + s.w / 2, pd.center.z + s.z - s.d / 2, pd.center.z + s.z + s.d / 2, "plotWall");
+          }
+
+          // Entry arch + shield plane
+          const arch = new THREE.Group();
+          const archW = 3.0;
+          const archMat = metal("#9fb0c9");
+          const post1 = new THREE.Mesh(new THREE.BoxGeometry(0.28, 2.4, 0.5), archMat);
+          const post2 = post1.clone();
+          post1.position.set((plotSize / 2 - 0.2) * entrySide, plotFloorY + 1.2, 1.35);
+          post2.position.set((plotSize / 2 - 0.2) * entrySide, plotFloorY + 1.2, -1.35);
+          const beam = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.35, archW), archMat);
+          beam.position.set((plotSize / 2 - 0.2) * entrySide, plotFloorY + 2.3, 0);
+          arch.add(post1, post2, beam);
+          g.add(arch);
+
+          const shieldPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.7, 2.2),
+            new THREE.MeshStandardMaterial({
+              color: new THREE.Color(0x66a3ff),
+              transparent: true,
+              opacity: 0.0,
+              emissive: new THREE.Color(0x66a3ff),
+              emissiveIntensity: 1.2,
+              roughness: 0.2,
+              metalness: 0.0,
+              side: THREE.DoubleSide,
+            }),
+          );
+          shieldPlane.position.set((plotSize / 2 - 0.24) * entrySide, plotFloorY + 1.2, 0);
+          shieldPlane.rotation.y = entrySide === 1 ? -Math.PI / 2 : Math.PI / 2;
+          g.add(shieldPlane);
+
+          // Plot label billboard
+          const labelTex = makeLabelTexture([pd.name + " Plot", "Place units here for income"], { accent: pd.color });
+          const bill = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1.25), new THREE.MeshBasicMaterial({ map: labelTex, transparent: true, opacity: 0.95 }));
+          bill.position.set(0, plotFloorY + 2.4, -plotSize / 2 + 0.7);
+          bill.rotation.y = Math.PI;
+          g.add(bill);
+
+          // Display pads (2x3)
+          const pads = [];
+          const padMat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(0x121622),
+            roughness: 0.55,
+            metalness: 0.25,
+          });
+          const glowMat = neon(pd.color, 1.0);
+          const gridX = [-3.2, 0, 3.2];
+          const gridZ = [-2.3, 2.3];
+          let idx = 0;
+          for (let zI = 0; zI < gridZ.length; zI++) {
+            for (let xI = 0; xI < gridX.length; xI++) {
+              if (idx >= displayPadSlots) break;
+              const px = gridX[xI];
+              const pz = gridZ[zI] + 2.8;
+              const pad = new THREE.Group();
+              pad.position.set(px, plotFloorY, pz);
+              const base = new THREE.Mesh(new THREE.CylinderGeometry(displayPadRadius, displayPadRadius * 1.12, 0.22, 16), padMat);
+              base.position.y = 0.11;
+              base.castShadow = true;
+              base.receiveShadow = true;
+              pad.add(base);
+              const glow = new THREE.Mesh(new THREE.CylinderGeometry(displayPadRadius * 0.88, displayPadRadius * 0.88, 0.08, 16), glowMat.clone());
+              glow.position.y = 0.26;
+              glow.material.transparent = true;
+              glow.material.opacity = 0.5;
+              pad.add(glow);
+              g.add(pad);
+              pads.push({ idx, localPos: pad.position.clone(), occupied: null, padObj: pad });
+              idx++;
+            }
+          }
+
+          const plot = {
+            id: pd.id,
+            name: pd.name,
+            color: pd.color,
+            center: pd.center.clone(),
+            aabb: {
+              minX: pd.center.x - plotSize / 2,
+              maxX: pd.center.x + plotSize / 2,
+              minZ: pd.center.z - plotSize / 2,
+              maxZ: pd.center.z + plotSize / 2,
+            },
+            displayAabb: {
+              minX: pd.center.x - 5.2,
+              maxX: pd.center.x + 5.2,
+              minZ: pd.center.z + 0.3,
+              maxZ: pd.center.z + 7.4,
+            },
+            pads,
+            units: [], // unit ids
+            cash: pd.id === "player" ? 220 : 180,
+            shieldActiveUntil: 0,
+            shieldCooldownUntil: 0,
+            shieldDuration: 8.0,
+            shieldCooldown: 22.0,
+            group: g,
+            shieldPlane,
+            entrySide,
+          };
+          plots.set(plot.id, plot);
+          return plot;
+        };
+
+        const playerPlot = makePlot(plotDefs[0]);
+        const npcPlot1 = makePlot(plotDefs[1]);
+        const npcPlot2 = makePlot(plotDefs[2]);
+        const npcPlot3 = makePlot(plotDefs[3]);
+
+        // ============================================================
+        // Entities: Player + 3 NPCs
+        // ============================================================
+        const entities = [];
+
+        const makeCharacter = (bodyHex, nameTagHex) => {
+          const g = new THREE.Group();
+          const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.0, 0.55), plastic(bodyHex, 0.55));
+          body.position.y = 1.0;
+          body.castShadow = true;
+          g.add(body);
+          const head = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.65, 0.65), plastic("#ffe0b2", 0.55));
+          head.position.y = 1.75;
+          head.castShadow = true;
+          g.add(head);
+          const eyes = makeEyes(1.0);
+          eyes.position.set(0, 1.72, 0.35);
+          g.add(eyes);
+          // name ring
+          const ring = makeAuraRing(nameTagHex, 1.15);
+          ring.position.y = 0.36;
+          ring.material.opacity = 0.45;
+          g.add(ring);
+          return g;
+        };
+
+        const makeEntity = (id, name, plotId, colorHexStr, startPos) => {
+          const g = makeCharacter(colorHexStr, plots.get(plotId).color);
+          g.position.copy(startPos);
+          scene.add(g);
+          return {
+            id,
+            type: id === "player" ? "player" : "npc",
+            name,
+            plotId,
+            group: g,
+            // NPCs get a slightly smaller collision radius to avoid doorway snagging
+            radius: id === "player" ? 0.65 : 0.55,
+            height: 1.85,
+            velY: 0,
+            onGround: true,
+            yaw: 0,
+            holding: null, // unit id
+            holdingIsStolen: false,
+            holdingStolenFrom: null,
+            baseSpeed: 6.0,
+            sprintSpeed: 9.2,
+            ai: null,
+            tagCooldown: 0,
+          };
+        };
+
+        const player = makeEntity("player", "You", "player", "#63a4ff", new THREE.Vector3(playerPlot.center.x - 2.0, 0, playerPlot.center.z - 2.0));
+        entities.push(player);
+
+        const npc1 = makeEntity("npc1", plots.get("npc1").name, "npc1", "#ff7aa2", new THREE.Vector3(npcPlot1.center.x + 2.0, 0, npcPlot1.center.z - 2.0));
+        const npc2 = makeEntity("npc2", plots.get("npc2").name, "npc2", "#5dff97", new THREE.Vector3(npcPlot2.center.x - 2.0, 0, npcPlot2.center.z + 2.0));
+        const npc3 = makeEntity("npc3", plots.get("npc3").name, "npc3", "#ffd166", new THREE.Vector3(npcPlot3.center.x + 2.0, 0, npcPlot3.center.z + 2.0));
+        entities.push(npc1, npc2, npc3);
+
+        const initAI = (e) => {
+          e.ai = {
+            state: "idle", // idle | buy | home | steal | flee | defend
+            target: new THREE.Vector3(),
+            stateUntil: 0,
+            desiredUnitId: null,
+            lastDecisionAt: 0,
+            // Higher base aggression so NPCs actually cause chaos
+            stealBias: 0.55 + Math.random() * 0.25,
+            aggression: 1.0 + Math.random() * 0.35,
+            lastPos: new THREE.Vector3(),
+            stuckTime: 0,
+          };
+          e.ai.lastPos.copy(e.group.position);
+        };
+        initAI(npc1);
+        initAI(npc2);
+        initAI(npc3);
+
+        // ============================================================
+        // Static colliders: world bounds
+        // ============================================================
+        addCollider(world.bounds.minX - 2, world.bounds.minX + 0.2, world.bounds.minZ - 2, world.bounds.maxZ + 2, "bound");
+        addCollider(world.bounds.maxX - 0.2, world.bounds.maxX + 2, world.bounds.minZ - 2, world.bounds.maxZ + 2, "bound");
+        addCollider(world.bounds.minX - 2, world.bounds.maxX + 2, world.bounds.minZ - 2, world.bounds.minZ + 0.2, "bound");
+        addCollider(world.bounds.minX - 2, world.bounds.maxX + 2, world.bounds.maxZ - 0.2, world.bounds.maxZ + 2, "bound");
+
+        // Decorative chunky trees (as obstacles, light collisions)
+        const deco = new THREE.Group();
+        scene.add(deco);
+        const treeMat1 = plastic("#33c26a", 0.85);
+        const trunkMat = plastic("#8a624a", 0.9);
+        const placeTree = (x, z, s = 1) => {
+          const g = new THREE.Group();
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28 * s, 0.35 * s, 1.6 * s, 8), trunkMat);
+          trunk.position.y = 0.8 * s;
+          trunk.castShadow = true;
+          g.add(trunk);
+          const crown = new THREE.Mesh(new THREE.BoxGeometry(1.4 * s, 1.1 * s, 1.4 * s), treeMat1);
+          crown.position.y = 1.75 * s;
+          crown.castShadow = true;
+          g.add(crown);
+          g.position.set(x, 0, z);
+          deco.add(g);
+          addCollider(x - 0.6 * s, x + 0.6 * s, z - 0.6 * s, z + 0.6 * s, "tree");
+        };
+
+        // Keep plot entrances clear so NPCs don't get blocked by decoration.
+        const isBadTreeSpot = (x, z) => {
+          // keep central/conveyor corridor open
+          if (Math.abs(x) < 12.5 && z > conveyor.z0 - 6 && z < conveyor.z1 + 6) return true;
+          for (const pd of plotDefs) {
+            const px = pd.center.x;
+            const pz = pd.center.z;
+            const entrySide = px < 0 ? 1 : -1;
+            const doorX = px + entrySide * (plotSize / 2 + 2.2);
+            const doorZ = pz;
+            // no trees near plot footprint (expanded)
+            if (Math.abs(x - px) < plotSize / 2 + 7.5 && Math.abs(z - pz) < plotSize / 2 + 7.5) return true;
+            // no trees near the doorway outside point
+            const dx = x - doorX;
+            const dz = z - doorZ;
+            if (dx * dx + dz * dz < 9.5 * 9.5) return true;
+          }
+          return false;
+        };
+
+        for (let i = 0; i < 14; i++) {
+          let placed = false;
+          for (let t = 0; t < 60 && !placed; t++) {
+            const edge = Math.random() < 0.5;
+            const x = edge ? (Math.random() < 0.5 ? rand(-45, -34) : rand(34, 45)) : rand(-45, 45);
+            const z = edge ? rand(-45, 45) : Math.random() < 0.5 ? rand(-45, -34) : rand(34, 45);
+            if (isBadTreeSpot(x, z)) continue;
+            placeTree(x, z, rand(0.85, 1.25));
+            placed = true;
+          }
+        }
+
+        // ============================================================
+        // Inventory / holding visuals
+        // ============================================================
+        const attachUnitToEntity = (unit, entity) => {
+          unit.state = "held";
+          unit.mesh.userData.heldBy = entity.id;
+          unit.mesh.position.set(0, entity.height + 0.25, 0.8);
+          unit.mesh.rotation.set(0, Math.PI, 0);
+          entity.group.add(unit.mesh);
+          entity.holding = unit.id;
+        };
+        const detachUnitFromEntity = (unit, entity) => {
+          entity.group.remove(unit.mesh);
+          scene.add(unit.mesh);
+          unit.mesh.userData.heldBy = null;
+          entity.holding = null;
+        };
+
+        // ============================================================
+        // Plot placement / income
+        // ============================================================
+        const plotIncomePerSec = (plot) => {
+          let sum = 0;
+          for (const uid of plot.units) {
+            const u = allUnits.get(uid);
+            if (u) sum += u.income;
+          }
+          return sum;
+        };
+
+        const findEmptyPadNear = (plot, worldPos) => {
+          let best = null;
+          let bestD = Infinity;
+          for (const p of plot.pads) {
+            if (p.occupied) continue;
+            const wp = new THREE.Vector3(plot.center.x + p.localPos.x, 0, plot.center.z + p.localPos.z);
+            const d = wp.distanceTo(worldPos);
+            if (d < bestD) {
+              bestD = d;
+              best = { pad: p, worldPos: wp, d };
+            }
+          }
+          return best;
+        };
+
+        const placeUnitInPlot = (unit, plot, pad) => {
+          unit.state = "placed";
+          unit.ownerPlotId = plot.id;
+          unit.stolenFromPlotId = null;
+          unit.worldReturnAt = 0;
+          unit.mesh.rotation.set(0, Math.PI, 0);
+
+          // snap into plot space
+          scene.add(unit.mesh);
+          unit.mesh.position.set(plot.center.x + pad.localPos.x, 0, plot.center.z + pad.localPos.z);
+          unit.mesh.position.y = 0.35;
+
+          pad.occupied = unit.id;
+          if (!plot.units.includes(unit.id)) plot.units.push(unit.id);
+        };
+
+        const removeUnitFromPlot = (unit, plot) => {
+          // free pad
+          for (const p of plot.pads) {
+            if (p.occupied === unit.id) p.occupied = null;
+          }
+          plot.units = plot.units.filter((id) => id !== unit.id);
+        };
+
+        const inAabbXZ = (pos, aabb) => pos.x >= aabb.minX && pos.x <= aabb.maxX && pos.z >= aabb.minZ && pos.z <= aabb.maxZ;
+
+        // ============================================================
+        // Interactions
+        // ============================================================
+        const INTERACT_RANGE = 2.4;
+        const getPlotAtPos = (pos) => {
+          for (const p of plots.values()) {
+            if (inAabbXZ(pos, p.aabb)) return p;
+          }
+          return null;
+        };
+
+        const isShieldActive = (plot) => world.time < plot.shieldActiveUntil;
+        const setShieldVisual = (plot) => {
+          const active = isShieldActive(plot);
+          plot.shieldPlane.material.opacity = active ? 0.38 : 0.0;
+        };
+
+        // NPC navigation helper: route via the plot doorway to avoid getting stuck on walls
+        const getPlotDoorPoint = (plot, outside = false) => {
+          const offset = plotSize / 2 + (outside ? 2.2 : -1.25);
+          return new THREE.Vector3(plot.center.x + plot.entrySide * offset, 0, plot.center.z);
+        };
+
+        const getNpcNavTarget = (npc, finalTarget, targetPlotId = null) => {
+          const curPlot = getPlotAtPos(npc.group.position);
+          const targetPlot = targetPlotId ? plots.get(targetPlotId) : getPlotAtPos(finalTarget);
+
+          // If we are inside a plot that is NOT our destination plot, exit via doorway first
+          if (curPlot && (!targetPlot || curPlot.id !== targetPlot.id)) {
+            const doorInside = getPlotDoorPoint(curPlot, false);
+            const doorOutside = getPlotDoorPoint(curPlot, true);
+            return npc.group.position.distanceTo(doorInside) < 1.05 ? doorOutside : doorInside;
+          }
+
+          // If our destination is inside a plot and we're outside it, enter via its doorway
+          if (targetPlot && (!curPlot || curPlot.id !== targetPlot.id)) {
+            const doorOutside = getPlotDoorPoint(targetPlot, true);
+            const doorInside = getPlotDoorPoint(targetPlot, false);
+            return npc.group.position.distanceTo(doorOutside) < 1.25 ? doorInside : doorOutside;
+          }
+
+          return finalTarget;
+        };
+
+        const computeInteractTargetFor = (entity) => {
+          if (entity.holding) return null;
+          const pos = entity.group.position;
+          let best = null;
+
+          // 1) conveyor buys
+          for (const uid of conveyorUnits) {
+            const u = allUnits.get(uid);
+            if (!u) continue;
+            const d = u.mesh.position.distanceTo(pos);
+            if (d <= INTERACT_RANGE && (!best || d < best.d)) best = { kind: "buy", unit: u, d };
+          }
+
+          // 2) loose pickups
+          for (const uid of looseUnits) {
+            const u = allUnits.get(uid);
+            if (!u) continue;
+            const d = u.mesh.position.distanceTo(pos);
+            if (d <= INTERACT_RANGE && (!best || d < best.d)) best = { kind: "pickup", unit: u, d };
+          }
+
+          // 3) placed units (pickup/steal)
+          for (const plot of plots.values()) {
+            for (const uid of plot.units) {
+              const u = allUnits.get(uid);
+              if (!u || u.state !== "placed") continue;
+              const d = u.mesh.position.distanceTo(pos);
+              if (d > INTERACT_RANGE) continue;
+              if (plot.id !== entity.plotId && isShieldActive(plot)) continue; // shield blocks stealing/picking
+              if (!best || d < best.d) {
+                best = { kind: plot.id === entity.plotId ? "pickupPlaced" : "steal", unit: u, plot, d };
+              }
+            }
+          }
+
+          return best;
+        };
+
+        const tryBuyUnit = (buyerEntity, unit) => {
+          const buyerPlot = plots.get(buyerEntity.plotId);
+          if (!buyerPlot) return false;
+          if (buyerPlot.cash < unit.price) return false;
+          buyerPlot.cash -= unit.price;
+
+          // remove from conveyor list
+          const idx = conveyorUnits.indexOf(unit.id);
+          if (idx >= 0) conveyorUnits.splice(idx, 1);
+          unit.state = "held";
+          unit.ownerPlotId = buyerPlot.id;
+          unit.stolenFromPlotId = null;
+
+          attachUnitToEntity(unit, buyerEntity);
+          beep("buy", 0.14);
+          pushFeed(`${buyerEntity.name} bought ${unit.defKey} (${unit.rarity.key}${unit.mutation.key !== "None" ? " • " + unit.mutation.key : ""}).`, "good");
+          return true;
+        };
+
+        const tryStealOrPickup = (picker, unit, fromPlot) => {
+          if (picker.holding) return false;
+          if (unit.state === "placed" && fromPlot) {
+            if (fromPlot.id !== picker.plotId && isShieldActive(fromPlot)) {
+              beep("alarm", 0.1);
+              pushFeed(`${fromPlot.name}'s shield blocked a steal.`, "warn");
+              return false;
+            }
+            removeUnitFromPlot(unit, fromPlot);
+            unit.stolenFromPlotId = fromPlot.id !== picker.plotId ? fromPlot.id : null;
+          } else if (unit.state === "dropped") {
+            const i = looseUnits.indexOf(unit.id);
+            if (i >= 0) looseUnits.splice(i, 1);
+          }
+
+          attachUnitToEntity(unit, picker);
+          if (unit.stolenFromPlotId && unit.stolenFromPlotId !== picker.plotId) {
+            picker.holdingIsStolen = true;
+            picker.holdingStolenFrom = unit.stolenFromPlotId;
+            beep("alarm", 0.08);
+          } else {
+            picker.holdingIsStolen = false;
+            picker.holdingStolenFrom = null;
+            beep("coin", 0.07);
+          }
+          return true;
+        };
+
+        const dropHeldUnit = (entity) => {
+          if (!entity.holding) return;
+          const unit = allUnits.get(entity.holding);
+          if (!unit) return;
+
+          detachUnitFromEntity(unit, entity);
+          entity.holdingIsStolen = false;
+          entity.holdingStolenFrom = null;
+
+          // attempt place if in own plot display
+          const pos = entity.group.position.clone();
+          const plot = getPlotAtPos(pos);
+          const ownerPlot = plots.get(entity.plotId);
+
+          const placeInOwnerPlot = plot && plot.id === entity.plotId && inAabbXZ(pos, plot.displayAabb);
+          if (placeInOwnerPlot) {
+            const near = findEmptyPadNear(ownerPlot, pos);
+            if (near && near.d <= 2.6) {
+              // capture: if it was stolen, it becomes yours now
+              placeUnitInPlot(unit, ownerPlot, near.pad);
+              beep("coin", 0.14);
+              if (unit.stolenFromPlotId) {
+                const victim = plots.get(unit.stolenFromPlotId);
+                pushFeed(`${entity.name} secured a stolen unit from ${victim ? victim.name : "someone"}!`, "good");
+              } else {
+                pushFeed(`${entity.name} placed ${unit.defKey} in their display.`, "info");
+              }
+              unit.stolenFromPlotId = null;
+              return;
+            }
+          }
+
+          // otherwise drop to ground
+          const forward = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), entity.yaw);
+          unit.mesh.position.copy(entity.group.position).add(forward.multiplyScalar(1.1));
+          unit.mesh.position.y = 0.35;
+          unit.mesh.rotation.set(0, entity.yaw + Math.PI, 0);
+          unit.state = "dropped";
+          if (!looseUnits.includes(unit.id)) looseUnits.push(unit.id);
+
+          // if stolen, auto-return after a bit (prevents clutter + encourages chases)
+          if (unit.stolenFromPlotId) unit.worldReturnAt = world.time + 18 + Math.random() * 8;
+          beep("coin", 0.06);
+          pushFeed(`${entity.name} dropped ${unit.defKey}.`, "warn");
+        };
+
+        // ============================================================
+        // Player input
+        // ============================================================
+        const keys = {
+          w: false,
+          a: false,
+          s: false,
+          d: false,
+          shift: false,
+          space: false,
+        };
+        let interactPressed = false;
+        let dropPressed = false;
+
+        // Mouse look (simple pointer lock camera)
+        const mouse = {
+          yaw: 0,
+          pitch: -0.35,
+          sensitivity: 0.0022,
+          locked: false,
+        };
+        renderer.domElement.addEventListener("click", () => {
+          ensureAudio();
+          if (renderer.domElement.requestPointerLock) renderer.domElement.requestPointerLock();
+        });
+        document.addEventListener("pointerlockchange", () => {
+          mouse.locked = document.pointerLockElement === renderer.domElement;
+        });
+        document.addEventListener("mousemove", (e) => {
+          if (!mouse.locked) return;
+          mouse.yaw -= e.movementX * mouse.sensitivity;
+          mouse.pitch -= e.movementY * mouse.sensitivity;
+          mouse.pitch = clamp(mouse.pitch, -1.15, 0.15);
+        });
+
+        const onKey = (e, down) => {
+          ensureAudio(); // unlock attempt
+          const k = e.key.toLowerCase();
+          if (k === "w") keys.w = down;
+          else if (k === "a") keys.a = down;
+          else if (k === "s") keys.s = down;
+          else if (k === "d") keys.d = down;
+          else if (k === "shift") keys.shift = down;
+          else if (k === " ") keys.space = down;
+          else if (k === "e" && down) interactPressed = true;
+          else if (k === "q" && down) dropPressed = true;
+        };
+        window.addEventListener("keydown", (e) => {
+          if (e.repeat) return;
+          onKey(e, true);
+        });
+        window.addEventListener("keyup", (e) => onKey(e, false));
+        window.addEventListener("blur", () => {
+          keys.w = keys.a = keys.s = keys.d = keys.shift = keys.space = false;
+        });
+
+        // ============================================================
+        // Shield button
+        // ============================================================
+        elShieldBtn.addEventListener("click", () => {
+          ensureAudio();
+          const plot = plots.get("player");
+          if (!plot) return;
+          if (world.time < plot.shieldCooldownUntil) return;
+          plot.shieldActiveUntil = world.time + plot.shieldDuration;
+          plot.shieldCooldownUntil = world.time + plot.shieldCooldown;
+          setShieldVisual(plot);
+          beep("shield", 0.12);
+          pushFeed(`You activated your plot shield!`, "good");
+        });
+
+        // ============================================================
+        // Movement + collision
+        // ============================================================
+        const moveEntity = (entity, desiredVelXZ, dt, speed) => {
+          const pos = entity.group.position;
+          const next = pos.clone();
+          next.x += desiredVelXZ.x * dt * speed;
+          next.z += desiredVelXZ.z * dt * speed;
+
+          clampToBounds(next, entity.radius);
+          // resolve collisions
+          for (let iter = 0; iter < 3; iter++) {
+            let pushed = false;
+            for (const c of colliders) pushed = circleVsAabbPush(next, entity.radius, c) || pushed;
+            if (!pushed) break;
+          }
+          pos.x = next.x;
+          pos.z = next.z;
+        };
+
+        const updateVertical = (entity, dt) => {
+          const pos = entity.group.position;
+          const gravity = -20.0;
+          if (keys.space && entity.type === "player" && entity.onGround) {
+            entity.velY = 7.2;
+            entity.onGround = false;
+            beep("coin", 0.04);
+          }
+          entity.velY += gravity * dt;
+          pos.y += entity.velY * dt;
+          if (pos.y <= 0) {
+            pos.y = 0;
+            entity.velY = 0;
+            entity.onGround = true;
+          }
+        };
+
+        // ============================================================
+        // NPC AI
+        // ============================================================
+        const getBestStealTarget = (thief) => {
+          let best = null;
+          for (const plot of plots.values()) {
+            if (plot.id === thief.plotId) continue;
+            if (isShieldActive(plot)) continue;
+            // Prefer stealing from the player to create "multiplayer chaos"
+            const plotBias = plot.id === "player" ? 1.9 : 1.0;
+            for (const uid of plot.units) {
+              const u = allUnits.get(uid);
+              if (!u || u.state !== "placed") continue;
+              const dist = thief.group.position.distanceTo(u.mesh.position);
+              const value = u.income * 10 + u.price * 0.02; // income first, price slightly
+              const score = value * plotBias * (1 / (1 + dist * 0.07)); // prefer closer targets
+              if (!best || score > best.score) best = { plot, unit: u, score };
+            }
+          }
+          return best;
+        };
+
+        const npcDecide = (npc) => {
+          const ai = npc.ai;
+          const plot = plots.get(npc.plotId);
+          if (!ai || !plot) return;
+
+          const threatened = findThiefCarryingFrom(plot.id, npc.group.position, 12.5);
+          if (threatened) {
+            ai.state = "defend";
+            ai.target.copy(threatened.entity.group.position);
+            ai.stateUntil = world.time + 4.2;
+            ai.desiredUnitId = threatened.unit.id;
+            return;
+          }
+
+          if (npc.holding) {
+            ai.state = "home";
+            ai.target.copy(plot.center).add(new THREE.Vector3(0, 0, 4.5));
+            ai.stateUntil = world.time + 6.0;
+            return;
+          }
+
+          // If the player has loot and isn't shielded, steal much more often
+          const playerPlot = plots.get("player");
+          const playerHasLoot = !!playerPlot && playerPlot.units.length > 0 && !isShieldActive(playerPlot);
+          const stealChance = playerHasLoot ? clamp(ai.stealBias + 0.28 * ai.aggression, 0.55, 0.92) : clamp(ai.stealBias * 0.9, 0.25, 0.75);
+          const target = getBestStealTarget(npc);
+          const forceStealPlayer = !!target && playerHasLoot && target.plot && target.plot.id === "player";
+          const trySteal = forceStealPlayer || Math.random() < stealChance;
+          if (trySteal && target) {
+            ai.state = "steal";
+            ai.desiredUnitId = target.unit.id;
+            ai.target.copy(target.unit.mesh.position);
+            ai.stateUntil = world.time + 8.5;
+            return;
+          }
+
+          // default: buy
+          ai.state = "buy";
+          // Roam along the whole belt so they actually reach units
+          ai.target.set(conveyor.centerX + rand(-2.4, 2.4), 0, rand(conveyor.z0 + 6, conveyor.z1 - 6));
+          ai.stateUntil = world.time + 7.0;
+        };
+
+        const npcMoveTowards = (npc, target, dt, speedMult = 1, targetPlotId = null) => {
+          const navTarget = getNpcNavTarget(npc, target, targetPlotId);
+          const to = navTarget.clone().sub(npc.group.position);
+          to.y = 0;
+          const d = to.length();
+          if (d < 0.05) return { dir: new THREE.Vector3(), d };
+          const dir = to.multiplyScalar(1 / d);
+          const speed = (npc.baseSpeed + 0.4) * speedMult;
+          moveEntity(npc, dir, dt, speed);
+          // face movement direction
+          npc.yaw = Math.atan2(dir.x, dir.z);
+          npc.group.rotation.y = npc.yaw;
+          return { dir, d };
+        };
+
+        const npcTryBuyNear = (npc) => {
+          const plot = plots.get(npc.plotId);
+          if (!plot) return false;
+          let best = null;
+          const pos = npc.group.position;
+          for (const uid of conveyorUnits) {
+            const u = allUnits.get(uid);
+            if (!u) continue;
+            const d = u.mesh.position.distanceTo(pos);
+            if (d <= 2.6 && (!best || d < best.d)) best = { u, d };
+          }
+          if (!best) return false;
+          if (plot.cash < best.u.price) return false;
+          tryBuyUnit(npc, best.u);
+          return true;
+        };
+
+        const npcTryStealNear = (npc) => {
+          const ai = npc.ai;
+          if (!ai || !ai.desiredUnitId) return false;
+          const u = allUnits.get(ai.desiredUnitId);
+          if (!u || u.state !== "placed") {
+            // Target disappeared; re-plan immediately
+            ai.stateUntil = 0;
+            return false;
+          }
+          const victimPlot = plots.get(u.ownerPlotId);
+          if (!victimPlot || isShieldActive(victimPlot)) {
+            ai.stateUntil = 0;
+            return false;
+          }
+          const d = u.mesh.position.distanceTo(npc.group.position);
+          if (d > 2.5) return false;
+          tryStealOrPickup(npc, u, victimPlot);
+          if (u.stolenFromPlotId) {
+            pushFeed(`${npc.name} stole ${u.defKey} from ${victimPlot.name}!`, "bad");
+            beep("alarm", 0.08);
+          }
+          return true;
+        };
+
+        const npcTryPlaceAtHome = (npc) => {
+          if (!npc.holding) return false;
+          const plot = plots.get(npc.plotId);
+          const u = allUnits.get(npc.holding);
+          if (!plot || !u) return false;
+          const pos = npc.group.position.clone();
+          const near = findEmptyPadNear(plot, pos);
+          if (!near || near.d > 3.0) return false;
+          detachUnitFromEntity(u, npc);
+          placeUnitInPlot(u, plot, near.pad);
+          npc.holdingIsStolen = false;
+          npc.holdingStolenFrom = null;
+          pushFeed(`${npc.name} displayed ${u.defKey}.`, "info");
+          return true;
+        };
+
+        const findThiefCarryingFrom = (plotId, nearPos, within) => {
+          let best = null;
+          for (const e of entities) {
+            if (!e.holding) continue;
+            const u = allUnits.get(e.holding);
+            if (!u) continue;
+            if (u.stolenFromPlotId !== plotId) continue;
+            const d = e.group.position.distanceTo(nearPos);
+            if (d <= within && (!best || d < best.d)) best = { entity: e, unit: u, d };
+          }
+          return best;
+        };
+
+        const tryTagDrop = (defender, targetEntity) => {
+          if (defender.tagCooldown > 0) return false;
+          if (!targetEntity.holding) return false;
+          const u = allUnits.get(targetEntity.holding);
+          if (!u) return false;
+          // Only tag if unit was stolen from defender's plot
+          const defPlot = plots.get(defender.plotId);
+          if (!defPlot) return false;
+          if (u.stolenFromPlotId !== defPlot.id) return false;
+          const d = defender.group.position.distanceTo(targetEntity.group.position);
+          if (d > 1.45) return false;
+
+          // force drop
+          const thiefName = targetEntity.name;
+          dropHeldUnit(targetEntity);
+          defender.tagCooldown = 1.6;
+          beep("alarm", 0.09);
+          pushFeed(`${defender.name} tagged ${thiefName} — stolen unit dropped!`, "warn");
+          return true;
+        };
+
+        const updateNPC = (npc, dt) => {
+          const ai = npc.ai;
+          if (!ai) return;
+          const plot = plots.get(npc.plotId);
+          if (!plot) return;
+
+          // income for NPC plot
+          plot.cash += plotIncomePerSec(plot) * dt;
+
+          // cool down tag
+          npc.tagCooldown = Math.max(0, npc.tagCooldown - dt);
+
+          // If holding stolen and player nearby, flee harder
+          const playerDist = npc.group.position.distanceTo(player.group.position);
+          const panic = npc.holding && playerDist < 7.0;
+
+          // Decide frequently so NPCs feel alive
+          if (world.time > ai.stateUntil || world.time - ai.lastDecisionAt > 2.6) {
+            ai.lastDecisionAt = world.time;
+            npcDecide(npc);
+          }
+
+          if (ai.state === "buy") {
+            npcMoveTowards(npc, ai.target, dt, panic ? 1.18 : 1.0, null);
+            npcTryBuyNear(npc);
+          } else if (ai.state === "steal") {
+            const u = ai.desiredUnitId ? allUnits.get(ai.desiredUnitId) : null;
+            if (u && u.state === "placed") ai.target.copy(u.mesh.position);
+            const victimPlotId = u && u.ownerPlotId ? u.ownerPlotId : null;
+            npcMoveTowards(npc, ai.target, dt, panic ? 1.16 : 1.03, victimPlotId);
+            npcTryStealNear(npc);
+            if (npc.holding) {
+              ai.state = "home";
+              ai.target.copy(plot.center).add(new THREE.Vector3(0, 0, 4.5));
+              ai.stateUntil = world.time + 7.5;
+            }
+          } else if (ai.state === "home") {
+            npcMoveTowards(npc, ai.target, dt, panic ? 1.2 : 1.0, plot.id);
+            npcTryPlaceAtHome(npc);
+          } else if (ai.state === "defend") {
+            const threatened = findThiefCarryingFrom(plot.id, npc.group.position, 16.0);
+            if (!threatened) {
+              ai.state = "idle";
+              ai.stateUntil = world.time + 1.2;
+              return;
+            }
+            ai.target.copy(threatened.entity.group.position);
+            npcMoveTowards(npc, ai.target, dt, 1.15, null);
+            tryTagDrop(npc, threatened.entity);
+          } else {
+            // idle: wander a little
+            if (world.time > ai.stateUntil) {
+              ai.target.copy(plot.center).add(new THREE.Vector3(rand(-4.2, 4.2), 0, rand(-4.2, 4.2)));
+              ai.stateUntil = world.time + 1.8;
+            }
+            npcMoveTowards(npc, ai.target, dt, 0.75, plot.id);
+          }
+
+          // Simple stuck detector: if we barely moved for a while, force a re-plan
+          const moved = npc.group.position.distanceTo(ai.lastPos);
+          ai.stuckTime = moved < 0.02 ? ai.stuckTime + dt : 0;
+          ai.lastPos.copy(npc.group.position);
+          if (ai.stuckTime > 1.35) {
+            ai.stuckTime = 0;
+            ai.stateUntil = 0;
+            ai.lastDecisionAt = 0;
+            const curPlot = getPlotAtPos(npc.group.position);
+            if (curPlot) ai.target.copy(getPlotDoorPoint(curPlot, true));
+          }
+        };
+
+        // ============================================================
+        // Conveyor spawn + update
+        // ============================================================
+        const spawnConveyorUnit = () => {
+          // keep limited units on belt
+          if (conveyorUnits.length > 10) return;
+          const unit = createUnitInstance();
+          unit.state = "conveyor";
+          unit.ownerPlotId = null;
+          unit.stolenFromPlotId = null;
+          unit.mesh.position.set(conveyor.centerX + rand(-1.7, 1.7), 0.0, conveyor.z0 + 2.0);
+          unit.mesh.position.y = 0.36;
+          unit.mesh.rotation.y = Math.PI;
+          unit.mesh.scale.setScalar(0.95);
+          scene.add(unit.mesh);
+          conveyorUnits.push(unit.id);
+        };
+
+        // ============================================================
+        // Tutorial flow
+        // ============================================================
+        const tut = {
+          step: 0,
+          boughtOnce: false,
+          placedOnce: false,
+          stoleOnce: false,
+        };
+        const updateTutorial = () => {
+          if (tut.step === 0) {
+            elTutTitle.textContent = "First loop";
+            elTutText.innerHTML = `Walk to the conveyor and press <b>E</b> to buy your first unit.`;
+            if (tut.boughtOnce) tut.step = 1;
+          } else if (tut.step === 1) {
+            elTutTitle.textContent = "Get paid";
+            elTutText.innerHTML = `Bring the unit to <b>your plot</b> and press <b>Q</b> near a glowing pad to place it.`;
+            if (tut.placedOnce) tut.step = 2;
+          } else if (tut.step === 2) {
+            elTutTitle.textContent = "Main fun";
+            elTutText.innerHTML = `Enter an NPC plot and press <b>E</b> on a displayed unit to steal. Carrying stolen units is slower and defenders can tag you.`;
+            if (tut.stoleOnce) tut.step = 3;
+          } else {
+            elTut.classList.add("hide");
+          }
+        };
+
+        // ============================================================
+        // Main update loop
+        // ============================================================
+        const clock = new THREE.Clock();
+
+        // Player cash/income live in player plot
+        const playerPlotObj = plots.get("player");
+
+        const updateHUD = () => {
+          const p = plots.get("player");
+          const income = plotIncomePerSec(p);
+          elCash.textContent = fmtMoney(p.cash);
+          elIncome.textContent = fmtMoney(income) + " /s";
+          elOwned.textContent = String(p.units.length);
+          if (!player.holding) {
+            elHolding.textContent = "None";
+          } else {
+            const u = allUnits.get(player.holding);
+            if (u) {
+              const stolen = u.stolenFromPlotId ? " (stolen)" : "";
+              elHolding.textContent = `${u.defKey}${stolen}`;
+            } else {
+              elHolding.textContent = "None";
+            }
+          }
+
+          // Shield UI
+          const plot = plots.get("player");
+          const activeLeft = plot ? Math.max(0, plot.shieldActiveUntil - world.time) : 0;
+          const cdLeft = plot ? Math.max(0, plot.shieldCooldownUntil - world.time) : 0;
+          elShieldBtn.disabled = cdLeft > 0;
+          elShieldState.innerHTML = `<span class="small">Status:</span> ${activeLeft > 0 ? `<span style="color:var(--good); font-weight:800;">ACTIVE</span> (${fmtTime(activeLeft)})` : "Ready"}`;
+          elShieldCd.textContent = "Cooldown: " + fmtTime(cdLeft);
+        };
+
+        const updatePromptAndInteraction = () => {
+          if (player.holding) {
+            showPrompt(`<span class="tag">Q</span> Drop / Place your held unit`);
+            return;
+          }
+          const target = computeInteractTargetFor(player);
+          if (!target) {
+            showPrompt("");
+            return;
+          }
+          const u = target.unit;
+          const rarity = u.rarity;
+          const mut = u.mutation.key !== "None" ? ` • <b>${u.mutation.key}</b>` : "";
+          const pill = `<span class="rarityPill" style="border-color:${rarity.color}; color:${rarity.color};">${rarity.key}</span>`;
+          if (target.kind === "buy") {
+            showPrompt(
+              `<span class="tag">E</span> Buy <b>${u.defKey}</b>${pill}${mut} — <b>${fmtMoney(u.price)}</b> • <span style="color:var(--good); font-weight:800;">+${u.income.toFixed(1)}/s</span>`,
+            );
+          } else if (target.kind === "steal") {
+            const victimName = target.plot ? target.plot.name : "NPC";
+            showPrompt(
+              `<span class="tag">E</span> Steal <b>${u.defKey}</b>${pill}${mut} from <b>${victimName}</b> — <span style="color:var(--warn); font-weight:800;">slower while carrying</span>`,
+            );
+          } else {
+            showPrompt(`<span class="tag">E</span> Pick up <b>${u.defKey}</b>${pill}${mut}`);
+          }
+        };
+
+        const applyHeldSpeedPenalty = (entity, baseSpeed) => {
+          if (!entity.holding) return baseSpeed;
+          const u = allUnits.get(entity.holding);
+          if (!u) return baseSpeed * 0.85;
+          const stolen = !!u.stolenFromPlotId && u.stolenFromPlotId !== entity.plotId;
+          return stolen ? baseSpeed * 0.62 : baseSpeed * 0.78;
+        };
+
+        const updatePlayer = (dt) => {
+          // Income
+          playerPlotObj.cash += plotIncomePerSec(playerPlotObj) * dt;
+
+          // movement input
+          const inputX = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
+          const inputZ = (keys.w ? 1 : 0) - (keys.s ? 1 : 0);
+          const moving = inputX * inputX + inputZ * inputZ > 0.0001;
+          const dir = new THREE.Vector3();
+          if (moving) {
+            // WASD moves relative to camera yaw (mouse-controlled)
+            const forward = new THREE.Vector3(Math.sin(mouse.yaw), 0, Math.cos(mouse.yaw));
+            const right = new THREE.Vector3(-forward.z, 0, forward.x);
+            dir.addScaledVector(right, inputX).addScaledVector(forward, inputZ);
+            if (dir.lengthSq() > 0.0001) dir.normalize();
+          }
+
+          let speed = keys.shift ? player.sprintSpeed : player.baseSpeed;
+          speed = applyHeldSpeedPenalty(player, speed);
+
+          moveEntity(player, dir, dt, speed);
+          updateVertical(player, dt);
+
+          if (moving) {
+            player.yaw = Math.atan2(dir.x, dir.z);
+            player.group.rotation.y = player.yaw;
+          }
+
+          // handle interactions
+          if (interactPressed) {
+            interactPressed = false;
+            const target = computeInteractTargetFor(player);
+            if (target) {
+              const u = target.unit;
+              if (target.kind === "buy") {
+                const ok = tryBuyUnit(player, u);
+                if (ok) tut.boughtOnce = true;
+                else {
+                  beep("alarm", 0.07);
+                  pushFeed(`Not enough cash to buy ${u.defKey}.`, "warn");
+                }
+              } else if (target.kind === "steal") {
+                const ok = tryStealOrPickup(player, u, target.plot);
+                if (ok) {
+                  tut.stoleOnce = true;
+                  const victim = target.plot ? target.plot.name : "NPC";
+                  pushFeed(`You stole ${u.defKey} from ${victim}!`, "bad");
+                }
+              } else if (target.kind === "pickupPlaced") {
+                const plot = plots.get(player.plotId);
+                const ok = tryStealOrPickup(player, u, plot);
+                if (ok) pushFeed(`You picked up your ${u.defKey}.`, "info");
+              } else if (target.kind === "pickup") {
+                const ok = tryStealOrPickup(player, u, null);
+                if (ok) pushFeed(`You picked up ${u.defKey}.`, "info");
+              }
+            }
+          }
+          if (dropPressed) {
+            dropPressed = false;
+            if (player.holding) {
+              const wasHeld = player.holding;
+              const u = allUnits.get(wasHeld);
+              dropHeldUnit(player);
+              if (u && u.state === "placed" && plots.get("player").units.includes(u.id)) tut.placedOnce = true;
+            }
+          }
+        };
+
+        // ============================================================
+        // Camera follow (third-person smooth)
+        // ============================================================
+        const cam = {
+          currentPos: new THREE.Vector3(),
+          currentLook: new THREE.Vector3(),
+        };
+        cam.currentPos.copy(camera.position);
+        cam.currentLook.set(0, 1.3, 0);
+
+        const updateCamera = (dt) => {
+          const p = player.group.position;
+          const desiredLook = p.clone().add(new THREE.Vector3(0, 1.6, 0));
+
+          // Orbit camera from mouse yaw/pitch (no more camera flips from movement)
+          const dist = 10.2;
+          const cosP = Math.cos(mouse.pitch);
+          const forward = new THREE.Vector3(Math.sin(mouse.yaw) * cosP, Math.sin(mouse.pitch), Math.cos(mouse.yaw) * cosP);
+          const desiredPos = desiredLook.clone().sub(forward.multiplyScalar(dist));
+          desiredPos.y = Math.max(0.75, desiredPos.y); // keep camera above ground
+          desiredPos.x = clamp(desiredPos.x, -55, 55);
+          desiredPos.z = clamp(desiredPos.z, -55, 55);
+
+          cam.currentPos.lerp(desiredPos, 1 - Math.pow(0.0008, dt));
+          cam.currentLook.lerp(desiredLook, 1 - Math.pow(0.001, dt));
+          camera.position.copy(cam.currentPos);
+          camera.lookAt(cam.currentLook);
+        };
+
+        // ============================================================
+        // Game loop
+        // ============================================================
+        const updateConveyor = (dt) => {
+          // scroll belt texture
+          if (matConveyorTop.map) matConveyorTop.map.offset.y -= dt * 0.9;
+
+          conveyor.spawnTimer += dt;
+          if (conveyor.spawnTimer >= conveyor.spawnEvery) {
+            conveyor.spawnTimer = 0;
+            spawnConveyorUnit();
+          }
+
+          // move units along belt
+          for (let i = conveyorUnits.length - 1; i >= 0; i--) {
+            const uid = conveyorUnits[i];
+            const u = allUnits.get(uid);
+            if (!u) {
+              conveyorUnits.splice(i, 1);
+              continue;
+            }
+            u.mesh.position.z += conveyor.speed * dt;
+            // gentle bob
+            u.mesh.position.y = 0.36 + Math.sin(world.time * 2.4 + i) * 0.02;
+            if (u.mesh.position.z > conveyor.z1 - 1.0) {
+              // despawn (missed)
+              scene.remove(u.mesh);
+              conveyorUnits.splice(i, 1);
+              allUnits.delete(uid);
+            }
+          }
+        };
+
+        const updateLooseUnits = () => {
+          for (let i = looseUnits.length - 1; i >= 0; i--) {
+            const uid = looseUnits[i];
+            const u = allUnits.get(uid);
+            if (!u) {
+              looseUnits.splice(i, 1);
+              continue;
+            }
+            // auto return stolen drops
+            if (u.stolenFromPlotId && u.worldReturnAt > 0 && world.time >= u.worldReturnAt) {
+              const victim = plots.get(u.stolenFromPlotId);
+              if (victim) {
+                const pad = victim.pads.find((p) => !p.occupied);
+                if (pad) {
+                  looseUnits.splice(i, 1);
+                  placeUnitInPlot(u, victim, pad);
+                  pushFeed(`${victim.name} recovered ${u.defKey}.`, "info");
+                  continue;
+                }
+              }
+              // if cannot return, delay again
+              u.worldReturnAt = world.time + 8;
+            }
+          }
+        };
+
+        const updateUnitVFX = () => {
+          // animate rainbow + halo spins
+          const t = world.time;
+          for (const u of allUnits.values()) {
+            if (!u || !u.model) continue;
+            const kind = u.model.userData.mutationKind;
+            if (kind === "rainbow") {
+              const hue = (t * 70 + u.id.charCodeAt(1) * 13) % 360;
+              const c = hslToColor(hue, 0.9, 0.58);
+              u.model.traverse((o) => {
+                if (o.isMesh && o.material && o.material.color) {
+                  // blend toward rainbow
+                  o.material.color.lerp(c, 0.15);
+                  if (o.material.emissive) o.material.emissive.lerp(c, 0.1);
+                }
+              });
+              if (u.mesh.userData.rainbowHalo) {
+                u.mesh.userData.rainbowHalo.material.color.copy(c);
+                u.mesh.userData.rainbowHalo.rotation.z = t * 0.6;
+              }
+            }
+            if (u.ring) u.ring.rotation.z = t * 0.35;
+          }
+        };
+
+        const updateShields = () => {
+          for (const p of plots.values()) setShieldVisual(p);
+        };
+
+        const updateNPCs = (dt) => {
+          updateNPC(npc1, dt);
+          updateNPC(npc2, dt);
+          updateNPC(npc3, dt);
+        };
+
+        const updateTags = () => {
+          // NPC defenders can tag player if carrying stolen from them near their plot
+          for (const npc of [npc1, npc2, npc3]) tryTagDrop(npc, player);
+        };
+
+        const update = () => {
+          const dtRaw = clock.getDelta();
+          const dt = Math.min(0.05, dtRaw);
+          if (world.paused) {
+            renderer.render(scene, camera);
+            requestAnimationFrame(update);
+            return;
+          }
+
+          world.time += dt;
+
+          updateConveyor(dt);
+          updateLooseUnits();
+          updateUnitVFX();
+          updateShields();
+          updateNPCs(dt);
+          updateTags();
+          updatePlayer(dt);
+          updateCamera(dt);
+          updatePromptAndInteraction();
+          updateTutorial();
+          updateHUD();
+
+          renderer.render(scene, camera);
+          requestAnimationFrame(update);
+        };
+
+        // ============================================================
+        // Initial spawns + intro feed
+        // ============================================================
+        for (let i = 0; i < 6; i++) spawnConveyorUnit();
+        pushFeed("Buy units from the conveyor, place them in your plot to earn cash.", "info");
+        pushFeed("Steal from NPC plots for bigger income (but defenders can tag you!).", "warn");
+        pushFeed("Use your Shield to protect your plot temporarily.", "info");
+        updateTutorial();
+
+        // ============================================================
+        // Resize
+        // ============================================================
+        window.addEventListener("resize", () => {
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start
+        update();
+      })();
+    </script>
+  </body>
+</html>
